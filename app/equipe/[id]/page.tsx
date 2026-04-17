@@ -14,7 +14,9 @@ const NIVEIS = {
 export default function PaginaEquipeDinamica() {
     const params = useParams();
     const equipeId = params.id as string;
-    const isTimeAzul = Number(equipeId) % 2 !== 0;
+    
+    // Lógica de cor dinâmica: Ímpar = Azul, Par = Vermelho
+    const ehAzul = Number(equipeId) % 2 !== 0;
 
     const [dados, setDados] = useState({ nivel: '1EF', status: 'parado', modo: 'cabo', operacao: 'soma' });
     const [conta, setConta] = useState({ texto: '', res: 0 });
@@ -25,16 +27,24 @@ export default function PaginaEquipeDinamica() {
         return onValue(partidaRef, (snap) => {
             if (snap.exists()) {
                 const val = snap.val();
+                
+                // Se o jogo começou e não temos uma conta, ou se mudou nível/operação, gera nova conta
                 if (val.status === 'jogando' && (!conta.texto || val.operacao !== dados.operacao || val.nivel !== dados.nivel)) {
                     gerar(val.nivel, val.operacao);
                 }
+                
+                // Se o jogo parou ou finalizou, limpa o input para a próxima
+                if (val.status !== 'jogando') {
+                    setInput('');
+                    setConta({ texto: '', res: 0 });
+                }
+
                 setDados(val);
             }
         });
     }, [conta.texto, dados.operacao, dados.status, dados.nivel]);
 
     const gerar = (nivelAtual: string, operacaoAtiva: string) => {
-        // Fallback: Se o nível vindo do banco for antigo/errado, usa 1EF
         const config = NIVEIS[nivelAtual as keyof typeof NIVEIS] || NIVEIS['1EF'];
         let n1 = Math.floor(Math.random() * (config.max - config.min + 1)) + config.min;
         let n2 = Math.floor(Math.random() * (config.max - config.min + 1)) + config.min;
@@ -62,43 +72,74 @@ export default function PaginaEquipeDinamica() {
 
     const responder = (e: React.FormEvent) => {
         e.preventDefault();
-        if (dados.status !== 'jogando') return;
+        if (dados.status !== 'jogando' || !input) return;
         
-        // CORREÇÃO DO ERRO: Fallback para evitar 'undefined' na forca
         const nivelAtual = NIVEIS[dados.nivel as keyof typeof NIVEIS] || NIVEIS['1EF'];
         const forca = nivelAtual.forca;
 
         if (parseInt(input) === conta.res) {
             if (dados.modo === 'cabo') {
-                update(ref(db, 'partida'), { posicao: increment(isTimeAzul ? -forca : forca) });
+                // Azul (Ímpar) puxa para - (esquerda), Vermelho (Par) puxa para + (direita)
+                update(ref(db, 'partida'), { 
+                    posicao: increment(ehAzul ? -forca : forca) 
+                });
             } else {
-                update(ref(db, `partida/progressoEquipes`), { [equipeId]: increment(forca) });
+                // Modo Corrida: Incrementa o progresso específico da equipe
+                update(ref(db, `partida/progressoEquipes/${equipeId}`), increment(forca));
             }
             gerar(dados.nivel, dados.operacao);
-        } else setInput('');
+        } else {
+            setInput(''); // Errou, limpa o campo
+        }
     };
 
     return (
-        <div className={`h-screen flex flex-col items-center justify-center p-6 text-white transition-all duration-1000 ${dados.status === 'jogando' ? (isTimeAzul ? 'bg-blue-700' : 'bg-red-700') : 'bg-slate-900'}`}>
-            <div className="bg-white text-slate-900 p-10 rounded-[3rem] shadow-2xl w-full max-w-lg text-center border-b-[12px] border-black/20">
+        <div className={`h-screen flex flex-col items-center justify-center p-6 text-white transition-all duration-500 ${dados.status === 'jogando' ? (ehAzul ? 'bg-[#0542b9]' : 'bg-[#c60929]') : 'bg-[#46178f]'}`}>
+            <div className="bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl w-full max-w-lg text-center border-b-[10px] border-black/10">
                 {dados.status === 'jogando' ? (
                     <>
-                        <div className="mb-4"><span className={`font-black uppercase text-xs px-3 py-1 rounded-full ${isTimeAzul ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>Equipe {equipeId} • {dados.nivel}</span></div>
-                        <div className="text-8xl font-black mb-10 tracking-tighter text-slate-800 animate-in zoom-in duration-300">{conta.texto}</div>
+                        <div className="mb-4">
+                            <span className={`font-black uppercase text-xs px-4 py-1 rounded-full ${ehAzul ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
+                                Equipe {equipeId} • {ehAzul ? 'Azul' : 'Vermelha'}
+                            </span>
+                        </div>
+                        <div className="text-7xl font-black mb-8 tracking-tighter text-slate-800 animate-in zoom-in duration-200">
+                            {conta.texto}
+                        </div>
                         <form onSubmit={responder}>
-                            <input autoFocus type="number" value={input} onChange={e => setInput(e.target.value)} className="w-full text-6xl border-4 rounded-3xl p-6 text-center mb-6 outline-none focus:border-yellow-500 transition-all border-slate-100" />
-                            <button className={`w-full ${isTimeAzul ? 'bg-blue-600' : 'bg-red-600'} text-white font-black py-6 rounded-2xl text-3xl shadow-lg active:translate-y-1 transition-all uppercase tracking-widest`}>ENVIAR</button>
+                            <input 
+                                autoFocus 
+                                type="number" 
+                                inputMode="numeric"
+                                value={input} 
+                                onChange={e => setInput(e.target.value)} 
+                                className="w-full text-5xl border-4 rounded-2xl p-4 text-center mb-4 outline-none focus:border-[#46178f] transition-all border-slate-100"
+                                placeholder="?"
+                            />
+                            <button className={`w-full ${ehAzul ? 'bg-[#0542b9]' : 'bg-[#c60929]'} text-white font-black py-5 rounded-xl text-2xl shadow-lg active:translate-y-1 transition-all uppercase`}>
+                                Enviar Resposta
+                            </button>
                         </form>
                     </>
                 ) : (
-                    <div className="py-12 flex flex-col items-center space-y-8">
-                        <div className="w-20 h-20 border-8 border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
+                    <div className="py-10 flex flex-col items-center space-y-6">
+                        <div className={`w-16 h-16 border-8 border-slate-100 ${ehAzul ? 'border-t-blue-600' : 'border-t-red-600'} rounded-full animate-spin`}></div>
                         <div className="text-center">
-                            <h2 className="text-3xl font-black text-slate-800 uppercase animate-pulse">Aguardando...</h2>
-                            <p className="text-slate-400 font-bold text-sm uppercase mt-2">O professor vai iniciar em breve</p>
+                            <h2 className="text-2xl font-black text-slate-800 uppercase italic">
+                                {dados.status === 'finalizado' ? 'Rodada Finalizada!' : 'Aguardando Início...'}
+                            </h2>
+                            <p className="text-slate-500 font-bold text-sm mt-2">
+                                Prepare-se, Equipe {equipeId}!
+                            </p>
                         </div>
                     </div>
                 )}
+            </div>
+            
+            {/* Shapes decorativos estilo Kahoot no fundo */}
+            <div className="absolute bottom-6 left-6 opacity-20 flex gap-4 pointer-events-none">
+                <div className="w-10 h-10 bg-white rotate-45" />
+                <div className="w-10 h-10 bg-white rounded-full" />
             </div>
         </div>
     );
