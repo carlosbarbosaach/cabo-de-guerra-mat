@@ -24,3 +24,17 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+
+@keyframes pull-left {
+  0%, 100% { transform: translateX(0) rotate(-5deg); }
+  50% { transform: translateX(-10px) rotate(-10deg); }
+}
+
+@keyframes pull-right {
+  0%, 100% { transform: translateX(0) rotate(5deg); }
+  50% { transform: translateX(10px) rotate(10deg); }
+}
+
+.animate-pull-left { animation: pull-left 0.5s infinite; }
+.animate-pull-right { animation: pull-right 0.5s infinite; }
